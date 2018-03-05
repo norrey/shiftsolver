@@ -1,0 +1,231 @@
+package io.carer.scheduler
+dialect "java"
+
+
+import java.util.Date;
+import java.util.List;
+import java.util.Calendar;
+import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
+import io.carer.scheduler.domain.Shift;
+import io.carer.scheduler.domain.ShiftDate;
+import io.carer.scheduler.domain.Worker;
+import io.carer.scheduler.domain.Client;
+import io.carer.scheduler.domain.ShiftRequirements;
+import io.carer.scheduler.domain.SupportSkillLevel;
+import io.carer.scheduler.domain.solver.drools.WorkerAssignmentTotal;
+import io.carer.scheduler.domain.solver.drools.WorkerDailyHoursTotal;
+import io.carer.scheduler.domain.solver.drools.WorkerWeeklyHoursTotal;
+import io.carer.scheduler.domain.solver.drools.AcquiredSkillLevel;
+import io.carer.scheduler.domain.solver.drools.AbleSupportActivity;
+import org.optaplanner.core.api.score.buildin.hardsoft.HardSoftScoreHolder;
+
+global HardSoftScoreHolder scoreHolder;
+
+//////////////////////////////////////////////////////
+// Hard Constraint Rules
+//////////////////////////////////////////////////////
+
+rule "eightMaximumHours"
+        when 
+            maxDayHours : Shift(maxDayHours > 8)
+        then
+            scoreHolder.addHardConstraintMatch(kcontext, -1);
+end
+
+rule "clientWorkerCriminalCheckRequirementsMustMatch"
+        when 
+            // For each shift assignment which must have a worker (worker!=null)
+            ShiftAssignment($leftId : id, $worker : worker, $shift : shift, $client: worker != null)
+            // If criminal record has not been checked, 
+            theShiftWorker : Worker(id==$worker.getId(), !ciminalRecordsChecked)
+            // And client shift requirement needs criminal record checked
+            theShiftClient : Client($shiftRequirements : shiftRequirements, id==$shift.getClient().getId())
+            theShiftRequirements : ShiftRequirements(id==$shiftRequirements.getId(), requiresCriminalRecordsCheck)
+            // go ahead and penalize the hard constraint
+        then
+            scoreHolder.addHardConstraintMatch(kcontext, -1);
+end
+
+
+rule "clientCarRequirement"
+        when 
+            ShiftAssignment($leftId : id, $worker : worker, $shift : shift, $client: worker != null)
+            theShiftWorker : Worker(id==$worker.getId(), !hasCar)
+            theShiftClient : Client($shiftRequirements : shiftRequirements, id==$shift.getClient().getId())
+            theShiftRequirements : ShiftRequirements(id==$shiftRequirements.getId(), requiresSupportOwnCar)
+        then
+            scoreHolder.addHardConstraintMatch(kcontext, -1);
+end
+
+rule "clientDrivingLicenceRequirement"
+        when 
+            ShiftAssignment($leftId : id, $worker : worker, $shift : shift, $client: worker != null)
+            theShiftWorker : Worker(id==$worker.getId(), !hasDrivingLicense)
+            theShiftClient : Client($shiftRequirements : shiftRequirements, id==$shift.getClient().getId())
+            theShiftRequirements : ShiftRequirements(id==$shiftRequirements.getId(), requiresDriversLicence)
+        then
+            scoreHolder.addHardConstraintMatch(kcontext, -1);
+end
+
+
+rule "religiousObservationSupport"
+        when 
+            ShiftAssignment($leftId : id, $worker : worker, $shift : shift, worker != null)
+            theShiftWorker : Worker(id==$worker.getId(), !religiousObservationSupport)
+            theShiftClient : Client($shiftRequirements : shiftRequirements, id==$shift.getClient().getId())
+            theShiftRequirements : ShiftRequirements(id==$shiftRequirements.getId(), requiresReligiousObservation)
+        then
+            scoreHolder.addHardConstraintMatch(kcontext, -1);
+end
+
+rule "workerCanProvideNightSupport"
+        when 
+            ShiftAssignment($leftId : id, $worker : worker, $shift : shift, worker != null)
+            theShiftWorker : Worker(id==$worker.getId(), !nightSupport)
+            theShiftClient : Client($shiftRequirements : shiftRequirements, id==$shift.getClient().getId())
+            theShiftRequirements : ShiftRequirements(id==$shiftRequirements.getId(), requiresNightWork)
+        then
+            scoreHolder.addHardConstraintMatch(kcontext, -1);
+end
+
+rule "workerCanProvideWeekendSupport"
+        when 
+            ShiftAssignment($leftId : id, $worker : worker, $shift : shift, worker != null)
+            theShiftWorker : Worker(id==$worker.getId(), !weekendSupport)
+            theShiftClient : Client($shiftRequirements : shiftRequirements, id==$shift.getClient().getId())
+            theShiftRequirements : ShiftRequirements(id==$shiftRequirements.getId(), requiresWeekendSupport)
+        then
+            scoreHolder.addHardConstraintMatch(kcontext, -1);
+end
+
+
+rule "supportSkillLevel"
+        when
+            ShiftAssignment($assignmentId : id, $worker : worker, $shift : shift, worker != null)
+            $got:   List() 
+                    from collect (  AcquiredSkillLevel( skillLevel memberOf $shift.getClient.getShiftRequirements.getRequiredSupportSkillLevels) from $worker.skillLevels )
+            eval($shift.getClient().getShiftRequirements().getRequiredSupportSkillLevels().size() != $got.size())
+        then
+            scoreHolder.addHardConstraintMatch(kcontext, -1);
+end
+
+
+rule "supportActivityRequirements"
+        when
+            ShiftAssignment($assignmentId : id, $worker : worker, $shift : shift, worker != null)
+            $got:   List() 
+                    from collect (  AbleSupportActivity( supportActivity memberOf $shift.getClient.getShiftRequirements.getRequiredSupportActivities) from $worker.supportActivities )
+            eval($shift.getClient().getShiftRequirements().getRequiredSupportActivities().size() != $got.size())
+        then
+            scoreHolder.addHardConstraintMatch(kcontext, -1);
+end
+
+
+//////////////////////////////////////////////////
+// Soft constraint rules
+// Insert worker assignement totals
+rule "insertEmployeeAssignmentTotal"
+        salience 1 // Do these rules first before perfoming the totals
+    when
+        $worker : Worker()
+        $assignmentTotal : Number() from accumulate(
+            $assignment : ShiftAssignment(worker == $worker),
+            count($assignment)
+        )
+    then
+        insertLogical(new WorkerAssignmentTotal($worker, $assignmentTotal.intValue()));
+end
+
+// Insert worker assignement total hours per day
+rule "insertWorkerAssignmentTotalHoursPerDay"
+salience 1 // Do these rules first before checking for totals
+    when
+        $worker : Worker()
+        $shiftDate : ShiftDate()
+        $assignmentTotal : Number() from accumulate(
+            $assignment : ShiftAssignment(worker == $worker, $startTime: shift.getShiftDate().getStart(), $endTime: shift.getShiftDate().getEnd(),  shift.getShiftDate().getStart().get(Calendar.DAY_OF_YEAR)== $shiftDate.getStart().get(Calendar.DAY_OF_YEAR)),
+            init( long total = 0; ),
+            action( total += (TimeUnit.MILLISECONDS.toHours($endTime.getTimeInMillis() - $startTime.getTimeInMillis()));
+                    // Glad that we can do this here
+                    //System.out.println("Start Time: "+ $startTime);
+                    //System.out.println("End Time: "+ $endTime);
+                    //System.out.println("MMMMMMMMM : "+total);
+            ),
+            result( new Long( total ) ) 
+        )
+    then
+        //System.out.println("Assignments with same date =>"+ $worker.getName() +" Start Date: "+ $shiftDate.getStart().getT+" End Date: "+ $shiftDate.getEnd()+" Total: "+ $assignmentTotal.intValue());
+        insertLogical(new WorkerDailyHoursTotal($worker, $shiftDate.getStart().get(Calendar.DAY_OF_YEAR), $assignmentTotal.intValue()));
+end
+
+// Insert worker assignement total hours per day
+rule "insertWorkerAssignmentTotalHoursPerWeek"
+salience 1 // Do these rules first before checking for totals
+    when
+        $worker : Worker()
+        $shiftDate : ShiftDate()
+        $assignmentTotal : Number() from accumulate(
+            $assignment : ShiftAssignment(worker == $worker, $startTime: shift.getShiftDate().getStart(), $endTime: shift.getShiftDate().getEnd(),  shift.getShiftDate().getStart().get(Calendar.WEEK_OF_YEAR)== $shiftDate.getStart().get(Calendar.WEEK_OF_YEAR)),
+            init( long total = 0; ),
+            action( total += (TimeUnit.MILLISECONDS.toHours($endTime.getTimeInMillis() - $startTime.getTimeInMillis()));
+            ),
+            result( new Long( total ) ) 
+        )
+    then
+        //System.out.println("Assignments with same week =>"+ $worker.getName() +" Start Date: "+ $shiftDate.getStart().getTime()+" End Date: "+ $shiftDate.getEnd().getTime()+" Total: "+ $assignmentTotal.intValue());
+        insertLogical(new WorkerWeeklyHoursTotal($worker, $shiftDate.getStart().get(Calendar.WEEK_OF_YEAR), $assignmentTotal.intValue()));
+end
+
+// Minimum number of assignments
+// Then the weighting for the soft constraints should be given
+rule "minimumTotalAssignments"
+        when
+            $workerAssignmentTotal: WorkerAssignmentTotal($total : total, total < 4)
+        then
+            scoreHolder.addSoftConstraintMatch(kcontext, ($total - 1) );
+end
+
+
+// Maximum number of assignments
+rule "maximumTotalAssignments"
+        when
+           $worker :WorkerAssignmentTotal($total : total, total > 20)
+        then
+            scoreHolder.addSoftConstraintMatch(kcontext, ($total - 1) );
+end
+    
+
+// Maximum number of daily hours
+rule "maximumWorkerDailyHours"
+        when
+           $workerDailyHours :WorkerDailyHoursTotal($total : total, total > 8)
+        then
+            scoreHolder.addSoftConstraintMatch(kcontext, ($total - 1) );
+end
+
+
+// Minimum number of daily hours
+rule "minimumWorkerDailyHours"
+        when
+           $workerDailyHours :WorkerDailyHoursTotal($total : total, total < 4)
+        then
+            scoreHolder.addSoftConstraintMatch(kcontext, ($total - 1) );
+end
+
+// Maximum number of weekly hours
+rule "maximumWorkerWeeklyHours"
+        when
+           $workerDailyHours :WorkerWeeklyHoursTotal($total : total, total > 40)
+        then
+            scoreHolder.addSoftConstraintMatch(kcontext, ($total - 1) );
+end
+
+
+// Minimum number of weekly hours
+rule "minimumWorkerWeeklyHours"
+        when
+           $workerDailyHours :WorkerWeeklyHoursTotal($total : total, total < 20)
+        then
+            scoreHolder.addSoftConstraintMatch(kcontext, ($total - 1) );
+end

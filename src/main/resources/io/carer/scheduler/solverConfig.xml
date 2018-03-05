@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<solver>
+    <!--<environmentMode>FAST_ASSERT</environmentMode>-->
+    <scanAnnotatedClasses/>
+    
+    <scoreDirectorFactory>
+        <scoreDefinitionType>HARD_SOFT</scoreDefinitionType>
+        <scoreDrl>io/carer/scheduler/solverRules.drl</scoreDrl>
+    </scoreDirectorFactory>
+
+    <termination>
+        <!--
+          Official benchmark secondsSpentLimit allowed on:
+          - ge0ffrey's main pc: sprint 11, medium 700, long 42000
+          
+        -->
+        <secondsSpentLimit>60</secondsSpentLimit>
+        <!--<bestScoreLimit>-0hard/-999999soft</bestScoreLimit>-->
+    </termination>
+    <localSearch>
+        <unionMoveSelector>
+            <moveListFactory>
+                <cacheType>PHASE</cacheType>
+                <moveListFactoryClass>io.carer.scheduler.move.factory.WorkerChangeMoveFactory</moveListFactoryClass>
+            </moveListFactory>
+            <moveListFactory>
+                <cacheType>PHASE</cacheType>
+                <moveListFactoryClass>io.carer.scheduler.move.factory.ShiftAssignmentSwapMoveFactory</moveListFactoryClass>
+            </moveListFactory>
+        </unionMoveSelector>
+        <acceptor>
+            <entityTabuSize>7</entityTabuSize>
+        </acceptor>
+        <forager>
+            <acceptedCountLimit>800</acceptedCountLimit>
+        </forager>
+    </localSearch>
+</solver>

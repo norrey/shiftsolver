@@ -1,0 +1,102 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>io.carer</groupId>
+    <artifactId>scheduler</artifactId>
+    <version>0.0.1-SNAPSHOT</version>
+    <packaging>jar</packaging>
+
+    <name>scheduler</name>
+    <url>http://maven.apache.org</url>
+
+    <properties>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <maven.compiler.source>1.8</maven.compiler.source>
+        <maven.compiler.target>1.8</maven.compiler.target>
+        <failOnMissingWebXml>false</failOnMissingWebXml>
+        <version.wildfly.swarm>1.0.0.CR1</version.wildfly.swarm>
+    </properties>
+    <dependencies>
+        <dependency>
+            <groupId>junit</groupId>
+            <artifactId>junit</artifactId>
+            <version>3.8.1</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.optaplanner</groupId>
+            <artifactId>optaplanner-core</artifactId>
+            <version>6.5.0.Final</version>
+        </dependency>
+        <dependency>
+            <groupId>com.squareup.retrofit2</groupId>
+            <artifactId>retrofit</artifactId>
+            <version>2.1.0</version>
+            <type>jar</type>
+        </dependency>
+        <dependency>
+            <groupId>com.squareup.retrofit2</groupId>
+            <artifactId>converter-jackson</artifactId>
+            <version>2.1.0</version>
+        </dependency>
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+            <version>2.7.3</version>
+            <type>jar</type>
+        </dependency>
+        <dependency>
+            <groupId>com.google.guava</groupId>
+            <artifactId>guava</artifactId>
+            <version>18.0</version>
+            <type>jar</type>
+        </dependency>
+        <!-- Random Data Generator -->
+        <dependency>
+            <groupId>io.github.benas</groupId>
+            <artifactId>random-beans</artifactId>
+            <version>3.4.0</version>
+        </dependency>
+        
+        <!-- Logging dependencies -->
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+            <version>1.7.5</version>
+        </dependency>
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-log4j12</artifactId>
+            <version>1.7.5</version>
+        </dependency>
+        
+        <dependency>
+            <groupId>org.jboss</groupId>
+            <artifactId>jboss-ejb-client</artifactId>
+            <version>2.0.2.Final</version>
+        </dependency>
+        <dependency>
+            <groupId>org.jboss.ws</groupId>
+            <artifactId>jbossws-api</artifactId>
+            <version>1.0.2.Final</version>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.swagger</groupId>
+            <artifactId>swagger-jaxrs</artifactId>
+            <version>1.5.8</version>
+        </dependency>
+        <dependency>
+            <groupId>io.swagger</groupId>
+            <artifactId>swagger-core</artifactId>
+            <version>1.5.8</version>
+        </dependency>
+        <dependency>
+            <groupId>javax</groupId>
+            <artifactId>javaee-api</artifactId>
+            <version>7.0</version>
+            <scope>provided</scope>
+        </dependency>
+    </dependencies>
+</project>
